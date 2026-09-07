@@ -10,16 +10,7 @@ Uniqueness verification — the search continues until a second solution is foun
 Solving replay — every placement and backtrack is recorded; replay the search with speed control (1x–8x), pause, and skip-to-end.
 Curated samples — a gentle daily puzzle, AI Escargot, and Norvig's 17-clue gauntlet.
 Accessible & responsive — ARIA roles and labels, keyboard-first workflow, layout that scales from phones to desktops.
-Quick Start
-No installation, no toolchain:
 
-git clone https://github.com/<your-username>/sudoku-solver.gitcd sudoku-solver
-Then open sudoku-solver.html in any modern browser — double-click the file, or drag it into a tab. That's the whole setup.
-
-Deploy to GitHub Pages (optional)
-Rename sudoku-solver.html to index.html.
-Go to Settings → Pages → Source, select your main branch and the / (root) folder.
-Your solver is live at https://<your-username>.github.io/sudoku-solver/.
 How to Use
 Enter the puzzle — click a cell and type 1–9, or use the number pad. Press N to toggle Notes mode and pencil-mark candidates; with fewer than 17 clues the app warns you that multiple solutions will exist.
 Solve — press Solve Puzzle. The solver first validates your clues for conflicts, then searches for a solution and probes for a second one to test uniqueness. Contradictory or unsolvable grids are reported with a clear explanation instead of hanging.
