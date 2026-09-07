@@ -58,18 +58,6 @@ After the first solution is found, the search continues until a second complete 
 Complexity
 Worst-case Sudoku search is exponential — the generalized n^2 x n^2 problem is NP-complete. In practice the MRV ordering collapses the tree: the easy sample solves with zero backtracks, and the hardest known grids need only a few hundred. Memory use is O(81) for the grid plus O(depth) for the recursion stack, and a recorded-step cap (400,000 events) keeps replay memory bounded even on pathological inputs.
 
-Repository Structure
-.├── sudoku-solver.html    # the entire application — one self-contained file├── README.md├── LICENSE               # MIT (add a copy to make it official)└── docs/    ├── screenshot.png    # optional — showcase image for this README    └── Sudoku_Solver_Mathematics_and_Algorithms_Cathy_Li.pdf  # companion paper
-Companion Paper
-Sudoku Solver: Mathematics and Algorithms (Cathy Li, September 6, 2026) — a technical paper accompanying this app:
-
-Sudoku formalized as a constraint satisfaction problem, and the 6.67 × 10^21 count of valid grids;
-the information-theoretic lower bound on clue counts;
-NP-completeness of the generalized n^2 x n^2 problem;
-full derivation of the backtracking + MRV + bitmask pipeline used by this solver;
-uniqueness detection via two-solution enumeration;
-complete, verified solutions of AI Escargot and Norvig's hardest puzzle.
-The PDF ships in docs/ — keep it, or delete this section if your repository is code-only.
 
 Browser Support
 Any evergreen browser — Chrome, Edge, Firefox, Safari — on desktop and mobile. After the page loads, no network connection is required.
