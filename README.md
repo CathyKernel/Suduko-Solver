@@ -99,4 +99,4 @@ After finding the first complete grid, the search continues until either a secon
 2. Open index.html in your browser – that’s it. No build tools or dependencies are required
 3. (Optional) Serve with a local HTTP server for better performance:
    python -m http.server 8000
-# or use any static server of your choice
+ or use any static server of your choice
