@@ -1,16 +1,6 @@
 # Suduko-Solver
 A dependency-free, single-file Sudoku solver. Enter any puzzle, solve it instantly with abacktracking depth-first search (MRV heuristic + bitmask constraint propagation), watch thesolving process step by step, and verify solution uniqueness — 100% in your browser,nothing ever leaves your machine.
 
-Features
-Single file, zero dependencies — one self-contained HTML file (~55 KB). No build step, no server, no framework, no tracking.
-Interactive input — click cells or use the full keyboard; on-screen number pad; conflicting clues highlighted in red in real time.
-Pencil marks (Notes mode) — record candidate digits in empty cells; notes are auto-eliminated from peers when a digit is placed.
-Fast solver — backtracking DFS + MRV heuristic + 9-bit bitmask constraints; typical puzzles solve in well under a millisecond.
-Uniqueness verification — the search continues until a second solution is found or the space is exhausted, reporting Unique vs Multiple.
-Solving replay — every placement and backtrack is recorded; replay the search with speed control (1x–8x), pause, and skip-to-end.
-Curated samples — a gentle daily puzzle, AI Escargot, and Norvig's 17-clue gauntlet.
-Accessible & responsive — ARIA roles and labels, keyboard-first workflow, layout that scales from phones to desktops.
-
 How to Use
 Enter the puzzle — click a cell and type 1–9, or use the number pad. Press N to toggle Notes mode and pencil-mark candidates; with fewer than 17 clues the app warns you that multiple solutions will exist.
 Solve — press Solve Puzzle. The solver first validates your clues for conflicts, then searches for a solution and probes for a second one to test uniqueness. Contradictory or unsolvable grids are reported with a clear explanation instead of hanging.
@@ -54,18 +44,3 @@ Search Loop in Pseudocode
 search():  if board is complete:            # 81 digits, all constraints hold      record solution; return true  cell <- empty cell with FEWEST candidates   # MRV heuristic  if candidates(cell) = empty:     # contradiction detected early      prune this branch  for d in candidates(cell):       # iterate set bits of the 9-bit mask      place d; rowMask |= d; colMask |= d; boxMask |= d      if search(): return true     # descend depth-first      remove d; restore masks      # <- backtracking  return false                     # all candidates failed
 Uniqueness Verification
 After the first solution is found, the search continues until a second complete grid appears or the space is exhausted (capped at 2 solutions). This is how the app distinguishes a proper puzzle — exactly one valid completion — from an underconstrained one, using the same solver with no extra code paths.
-
-Complexity
-Worst-case Sudoku search is exponential — the generalized n^2 x n^2 problem is NP-complete. In practice the MRV ordering collapses the tree: the easy sample solves with zero backtracks, and the hardest known grids need only a few hundred. Memory use is O(81) for the grid plus O(depth) for the recursion stack, and a recorded-step cap (400,000 events) keeps replay memory bounded even on pathological inputs.
-
-
-Browser Support
-Any evergreen browser — Chrome, Edge, Firefox, Safari — on desktop and mobile. After the page loads, no network connection is required.
-
-Privacy
-Everything runs locally: no analytics, no cookies, no network requests. Your puzzles never leave your browser.
-
-Acknowledgments
-Peter Norvig — Solving Every Sudoku Puzzle, the source of the hardest sample puzzle and much of the algorithmic inspiration
-Arto Inkala — creator of AI Escargot
-The 30-clue example grid from the Wikipedia Sudoku article
