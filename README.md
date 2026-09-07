@@ -1,46 +1,102 @@
-# Suduko-Solver
-A dependency-free, single-file Sudoku solver. Enter any puzzle, solve it instantly with abacktracking depth-first search (MRV heuristic + bitmask constraint propagation), watch thesolving process step by step, and verify solution uniqueness — 100% in your browser,nothing ever leaves your machine.
+# Sudoku Solver — Backtracking · MRV Heuristic · Bitmask Constraints
 
-How to Use
-Enter the puzzle — click a cell and type 1–9, or use the number pad. Press N to toggle Notes mode and pencil-mark candidates; with fewer than 17 clues the app warns you that multiple solutions will exist.
-Solve — press Solve Puzzle. The solver first validates your clues for conflicts, then searches for a solution and probes for a second one to test uniqueness. Contradictory or unsolvable grids are reported with a clear explanation instead of hanging.
-Read the result — the stats panel reports solve time, placements, backtracks, and clue count; the uniqueness badge tells you whether the puzzle is properly posed.
-Replay the search — press Watch Solving Process to watch the algorithm think: green flashes mark placements, red flashes mark backtracks.
-Keyboard Shortcuts
-Key	Action
-1 – 9	Fill selected cell
-0 / Backspace / Del	Erase selected cell
-↑ ↓ ← →	Move selection (wraps left/right)
-N	Toggle Notes (pencil-mark) mode
-Shift + 1–9	Toggle a single note in the selected cell
-Esc	Deselect cell
-Sample Puzzles
-Available from the Load Sample menu:
+A fully client-side Sudoku solver with an interactive grid, real‑time conflict detection, step‑by‑step replay of the search process, and uniqueness verification — all running in your browser.
 
-Puzzle	Difficulty	Clues	Notes
-Classic Evening Daily	Easy	30	The classic newspaper grid — pure constraint propagation, almost no backtracking
-AI Escargot	Hard	23	Discovered by Arto Inkala in 2006 — famously among the hardest puzzles ever created
-Norvig's Gauntlet	Expert	17	From Peter Norvig's essay — a pathological grid that forces the search tree to branch deeply
-How the Solver Works
-The engine is a classic backtracking depth-first search over the space of legal grids, accelerated with two techniques that turn an NP-sized brute-force problem into a millisecond-scale search.
+**Live Demo:** [https://cathyli-suduko-solver.netlify.app/](https://cathyli-suduko-solver.netlify.app/) 
 
-1. Bitmask Constraint Tracking
-Every row, column and 3x3 box keeps a 9-bit integer — bit d-1 set means digit d is already used in that unit. The legal candidates of any cell are computed in a single expression:
+---
 
+## Features
+
+- **Interactive 9×9 Sudoku grid** – click any cell and type `1–9` to enter clues, or use the on‑screen number pad.
+- **Pencil‑mark notes** – toggle `Notes` mode (or press `N`) to add/remove candidate digits in a cell.
+- **Real‑time conflict detection** – duplicates in rows, columns, or boxes are highlighted in red as you type.
+- **Smart solving engine** – combines **backtracking DFS** with the **MRV (Minimum Remaining Values)** heuristic and **bitmask constraint propagation**.
+- **Step‑by‑step replay** – watch the algorithm solve the puzzle, with green flashes for placements and red flashes for backtracks.
+- **Uniqueness check** – the solver continues after finding the first solution to determine whether a puzzle has a unique completion.
+- **Sample puzzles** – one‑click load of classic “easy”, “hard”, and “expert” puzzles.
+- **100% client‑side** – no data is sent to any server; all computation is done in your browser.
+- **Keyboard shortcuts** – full keyboard support for fast input and navigation.
+
+---
+
+## How to Use
+
+1. **Enter a puzzle**  
+   Click any empty cell and press a digit (`1–9`) on your keyboard, or tap the number buttons on the panel. To pencil‑mark candidates, turn on `Notes` mode (or press `N`), then click a cell and enter digits.
+
+2. **Solve**  
+   Click the **Solve Puzzle** button. The solver will run and, if a solution exists, display the completed grid along with statistics (time, placements, backtracks) and a uniqueness badge.
+
+3. **Watch the search**  
+   After solving, click **Watch Solving Process** to replay every step of the backtracking search. Use the playback controls to pause, change speed, or skip to the end.
+
+4. **Edit or reset**  
+   Use **Clear All** to start over, or load one of the built‑in sample puzzles. At any time, click **Edit Puzzle** to return to the input mode and modify clues.
+
+---
+
+## Keyboard Shortcuts
+
+| Key                           | Action                                       |
+|-------------------------------|----------------------------------------------|
+| `1` – `9`                     | Fill selected cell with digit                |
+| `0` / `Backspace` / `Delete`  | Erase selected cell (clear digit or notes)   |
+| `↑` / `↓` / `←` / `→`         | Move selection (wraps at edges)              |
+| `N`                           | Toggle Notes (pencil‑mark) mode              |
+| `Shift` + `1–9`               | Toggle a note in the selected cell           |
+| `Esc`                         | Deselect current cell                        |
+
+---
+
+## How the Solver Works
+
+The solver is a **backtracking depth‑first search** over the space of legal Sudoku grids. It is optimised with two key techniques:
+
+### 1. Bitmask Constraint Propagation
+Each row, column, and 3×3 box maintains a 9‑bit integer mask where bit `d‑1` is set if digit `d` is already used. The legal candidates for an empty cell are computed with a single bitwise expression:
 cand = 0x1FF & ~(rowMask | colMask | boxMask)
-No loops over 9 cells, no sets, no allocations — three ORs, one NOT and one AND make each constraint check effectively O(1).
 
-2. MRV Heuristic
-Instead of filling cells left-to-right, the solver always branches on the empty cell with the Minimum Remaining Values — the fewest legal candidates:
+This makes constraint checks **O(1)** and avoids any loops or set allocations.
 
-a cell with one candidate is a forced move — free constraint propagation;
-a cell with zero candidates proves the branch dead instantly.
-This single decision rule shrinks the search tree from millions of nodes to a few hundred on typical puzzles.
+### 2. MRV Heuristic (Minimum Remaining Values)
+Instead of filling cells in left‑to‑right order, the solver always chooses the empty cell with the **fewest legal candidates**. This drastically prunes the search tree:
+- A cell with one candidate is a **forced move** – effectively free constraint propagation.
+- A cell with zero candidates proves the branch dead immediately.
 
-3. Backtracking DFS
-Place a digit, update the three unit masks, recurse. If the subtree fails, the digit is removed (masks restored with bitwise AND-NOT) and the next candidate is tried. Every placement and rollback is recorded as a step, which powers the replay feature.
+On typical puzzles, MRV reduces the search from millions of nodes to a few hundred (or even zero backtracks for easy puzzles).
 
-Search Loop in Pseudocode
-search():  if board is complete:            # 81 digits, all constraints hold      record solution; return true  cell <- empty cell with FEWEST candidates   # MRV heuristic  if candidates(cell) = empty:     # contradiction detected early      prune this branch  for d in candidates(cell):       # iterate set bits of the 9-bit mask      place d; rowMask |= d; colMask |= d; boxMask |= d      if search(): return true     # descend depth-first      remove d; restore masks      # <- backtracking  return false                     # all candidates failed
-Uniqueness Verification
-After the first solution is found, the search continues until a second complete grid appears or the space is exhausted (capped at 2 solutions). This is how the app distinguishes a proper puzzle — exactly one valid completion — from an underconstrained one, using the same solver with no extra code paths.
+### 3. Backtracking DFS
+The solver recursively tries each candidate digit in the chosen cell, updates the three masks, and recurses. If a dead‑end is reached, it unplaces the digit (restoring the masks with bitwise AND‑NOT) and tries the next candidate. Every placement and rollback is recorded for the **replay** feature.
+
+### 4. Uniqueness Verification
+After finding the first complete grid, the search continues until either a second solution is found or the entire space is exhausted (capped at 2 solutions). This determines whether the puzzle has a **unique solution** – the standard requirement for a proper Sudoku.
+
+---
+
+## Complexity
+
+- Worst‑case (generalized Sudoku) is exponential (NP‑complete), but MRV ordering makes practical 9×9 puzzles tiny.
+- Typical solve time: **< 1 ms** for easy puzzles, a few milliseconds for the hardest known grids.
+- Memory usage: **O(81)** for the grid plus **O(depth)** for the recursion stack.
+
+---
+
+## Technology Stack
+
+- **Pure vanilla JavaScript** – no frameworks, no external libraries.
+- **HTML5 + CSS3** – fully responsive, works on desktop and mobile.
+- **All logic is client‑side** – no server requests, no tracking.
+
+---
+
+## Local Development
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/sudoku-solver.git
+   cd sudoku-solver
+2. Open index.html in your browser – that’s it. No build tools or dependencies are required
+3. (Optional) Serve with a local HTTP server for better performance:
+   python -m http.server 8000
+# or use any static server of your choice
