@@ -1,0 +1,1149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sudoku Solver — Backtracking · MRV · Bitmask Constraints</title>
+<meta name="description" content="Enter any Sudoku puzzle, solve it instantly with a backtracking search (MRV heuristic + bitmask constraint propagation), watch the solving process step by step, and verify solution uniqueness — all in your browser.">
+<style>
+  :root {
+    --zinc-50: #fafafa; --zinc-100: #f4f4f5; --zinc-200: #e4e4e7; --zinc-300: #d4d4d8;
+    --zinc-400: #a1a1aa; --zinc-500: #71717a; --zinc-600: #52525b; --zinc-700: #3f3f46;
+    --zinc-800: #27272a; --zinc-900: #18181b;
+    --emerald-50: #ecfdf5; --emerald-100: #d1fae5; --emerald-200: #a7f3d0; --emerald-300: #6ee7b7;
+    --emerald-500: #10b981; --emerald-600: #059669; --emerald-700: #047857;
+    --red-50: #fef2f2; --red-100: #fee2e2; --red-200: #fecaca; --red-400: #f87171; --red-600: #dc2626;
+    --amber-50: #fffbeb; --amber-200: #fde68a; --amber-500: #f59e0b; --amber-700: #b45309;
+    --rose-200: #fecdd3;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: var(--zinc-50); color: var(--zinc-900);
+    display: flex; flex-direction: column; min-height: 100vh; line-height: 1.5;
+  }
+  button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
+  button:disabled { cursor: not-allowed; opacity: .5; }
+
+  /* ---------- header ---------- */
+  .site-header { background: #fff; border-bottom: 1px solid var(--zinc-200); }
+  .header-inner {
+    max-width: 72rem; margin: 0 auto; padding: 0 1.5rem; height: 4rem;
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  }
+  .brand { display: flex; align-items: center; gap: .75rem; }
+  .brand-icon {
+    width: 2.5rem; height: 2.5rem; border-radius: .75rem; background: var(--emerald-600);
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .brand-icon svg { width: 1.25rem; height: 1.25rem; stroke: #fff; }
+  .brand h1 { font-size: 1.125rem; font-weight: 700; letter-spacing: -.01em; }
+  .brand p { font-size: .75rem; color: var(--zinc-500); }
+  .header-badge {
+    font-size: .75rem; color: var(--emerald-700); background: var(--emerald-50);
+    border: 1px solid var(--emerald-200); border-radius: 999px; padding: .25rem .75rem; white-space: nowrap;
+  }
+  @media (max-width: 640px) { .header-badge { display: none; } }
+
+  /* ---------- layout ---------- */
+  main { flex: 1; padding: 2rem 0 2.5rem; }
+  .container { max-width: 72rem; margin: 0 auto; padding: 0 1.5rem; }
+  .grid-layout {
+    display: grid; gap: 2rem; align-items: start;
+    grid-template-columns: minmax(0,1fr);
+  }
+  @media (min-width: 1024px) { .grid-layout { grid-template-columns: minmax(0,1fr) 360px; } }
+
+  .section-title { font-size: 1rem; font-weight: 600; }
+  .section-sub { font-size: .75rem; color: var(--zinc-500); margin-top: .125rem; line-height: 1.5; }
+  .board-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
+  .board-wrap { max-width: 560px; margin: 0 auto; }
+  @media (min-width: 1024px) { .board-wrap { margin: 0; } }
+
+  .badge {
+    display: inline-flex; align-items: center; border-radius: 999px; padding: .25rem .75rem;
+    font-size: .75rem; font-weight: 600; color: #fff; white-space: nowrap; flex-shrink: 0;
+  }
+  .badge-unique { background: var(--emerald-600); }
+  .badge-multi { background: var(--amber-500); }
+
+  /* ---------- board ---------- */
+  .board-frame {
+    position: relative; background: #fff; border: 2px solid var(--zinc-800); border-radius: .75rem;
+    overflow: hidden; box-shadow: 0 10px 15px -3px rgba(0,0,0,.06), 0 4px 6px -4px rgba(0,0,0,.06);
+    user-select: none;
+  }
+  .board { display: grid; grid-template-columns: repeat(9, 1fr); }
+  .cell {
+    aspect-ratio: 1/1; display: flex; align-items: center; justify-content: center;
+    font-size: clamp(1rem, 4.5vw, 1.55rem); font-weight: 500; position: relative;
+    border-right: 1px solid var(--zinc-200); border-bottom: 1px solid var(--zinc-200);
+    transition: background-color .07s; padding: 0; line-height: 1;
+  }
+  .cell:nth-child(9n) { border-right: none; }
+  .cell.br-r { border-right: 2px solid var(--zinc-500); }
+  .cell.br-b { border-bottom: 2px solid var(--zinc-500); }
+  .cell.given { font-weight: 600; color: var(--zinc-900); }
+  .cell.solved-digit { color: var(--emerald-600); }
+  .cell.conflict { background: var(--red-100) !important; color: var(--red-600) !important; font-weight: 600; }
+  .cell.selected { background: rgba(167,243,208,.8) !important; box-shadow: inset 0 0 0 2px var(--emerald-600); }
+  .cell.peer { background: var(--zinc-100); }
+  .cell.same { background: var(--emerald-50); }
+  .cell.flash-place { background: var(--emerald-200); }
+  .cell.flash-back { background: var(--rose-200); }
+  .cell .notes {
+    position: absolute; inset: 1px; display: grid; pointer-events: none;
+    grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+  }
+  .cell .notes span {
+    display: flex; align-items: center; justify-content: center;
+    font-size: clamp(.4rem, 1.7vw, .64rem); font-weight: 500; color: var(--zinc-400); line-height: 1;
+  }
+  .cell .notes span.match { color: var(--emerald-600); font-weight: 700; }
+  .board-frame.readonly .cell { cursor: default; }
+  .solve-overlay {
+    position: absolute; inset: 0; z-index: 10; display: none;
+    align-items: center; justify-content: center; flex-direction: column; gap: .75rem;
+    background: rgba(255,255,255,.75); backdrop-filter: blur(2px); border-radius: .75rem;
+  }
+  .solve-overlay.show { display: flex; }
+  .spinner {
+    width: 2rem; height: 2rem; border: 3px solid var(--emerald-200); border-top-color: var(--emerald-600);
+    border-radius: 50%; animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .solve-overlay p { font-size: .875rem; font-weight: 500; color: var(--zinc-700); }
+  .board-caption { margin-top: .75rem; text-align: center; font-size: .75rem; color: var(--zinc-400); }
+
+  /* ---------- cards ---------- */
+  .card { background: #fff; border: 1px solid var(--zinc-200); border-radius: .75rem; }
+  .card + .card { margin-top: 1.5rem; }
+  .card-header { padding: 1.25rem 1.25rem .5rem; }
+  .card-title { font-size: 1rem; font-weight: 600; display: flex; align-items: center; gap: .5rem; }
+  .card-desc { font-size: .8rem; color: var(--zinc-500); margin-top: .2rem; }
+  .card-body { padding: 1.25rem; }
+
+  /* ---------- number pad ---------- */
+  .numpad { display: grid; grid-template-columns: repeat(3, 1fr); gap: .5rem; }
+  .numpad button {
+    height: 2.75rem; border: 1px solid var(--zinc-300); border-radius: .5rem;
+    font-size: 1.05rem; font-weight: 600; color: var(--zinc-800); background: #fff;
+    transition: all .12s;
+  }
+  .numpad button:hover:not(:disabled) { border-color: var(--emerald-500); background: var(--emerald-50); color: var(--emerald-700); }
+  .numpad button:active:not(:disabled) { transform: scale(.95); }
+  .numpad button.done { opacity: .35; }
+  .numpad.notes-on button { color: var(--zinc-500); font-size: .9rem; }
+  .numpad.notes-on button:hover:not(:disabled) { color: var(--emerald-700); }
+  .tool-btn {
+    width: 100%; height: 2.5rem; border: 1px solid var(--zinc-300);
+    border-radius: .5rem; font-size: .85rem; font-weight: 500; color: var(--zinc-600);
+    background: #fff; transition: all .12s; display: flex; align-items: center; justify-content: center; gap: .5rem;
+  }
+  .btn-row .tool-btn { margin-top: 0; }
+  .tool-btn.danger:hover:not(:disabled) { border-color: var(--red-400); background: var(--red-50); color: var(--red-600); }
+  .tool-btn:not(.danger):hover:not(:disabled) { border-color: var(--emerald-500); background: var(--emerald-50); color: var(--emerald-700); }
+  .tool-btn.active { border-color: var(--emerald-500); background: var(--emerald-50); color: var(--emerald-700); }
+
+  /* ---------- buttons ---------- */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    border-radius: .5rem; font-weight: 600; transition: all .15s; border: 1px solid transparent;
+  }
+  .btn-primary {
+    width: 100%; height: 3rem; background: var(--emerald-600); color: #fff; font-size: 1rem;
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--emerald-700); }
+  .btn-dark { width: 100%; height: 2.75rem; background: var(--zinc-900); color: #fff; }
+  .btn-dark:hover:not(:disabled) { background: var(--zinc-800); }
+  .btn-dark .steps-count { font-size: .75rem; font-weight: 400; color: var(--zinc-400); margin-left: .25rem; }
+  .btn-outline {
+    height: 2.5rem; padding: 0 .75rem; border-color: var(--zinc-300); background: #fff;
+    font-size: .85rem; font-weight: 500; color: var(--zinc-600);
+  }
+  .btn-outline:hover:not(:disabled) { background: var(--zinc-100); }
+  .btn-outline.danger:hover:not(:disabled) { border-color: var(--red-400); background: var(--red-50); color: var(--red-600); }
+  .btn-row { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; }
+  .btn svg { width: 1rem; height: 1rem; }
+
+  /* ---------- status ---------- */
+  .hint-warn {
+    border: 1px solid var(--amber-200); background: var(--amber-50); color: var(--amber-700);
+    border-radius: .375rem; padding: .5rem .75rem; font-size: .75rem; line-height: 1.5; margin-bottom: 1rem;
+  }
+  .alert-error {
+    border: 1px solid var(--red-200); background: var(--red-50); border-radius: .5rem;
+    padding: .75rem; margin-bottom: 1rem;
+  }
+  .alert-error .alert-title { font-size: .85rem; font-weight: 600; color: var(--red-600); }
+  .alert-error .alert-msg { font-size: .75rem; color: var(--zinc-600); margin-top: .25rem; line-height: 1.5; }
+
+  /* ---------- stats ---------- */
+  .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .625rem; }
+  .stat-tile { border: 1px solid var(--zinc-200); background: var(--zinc-50); border-radius: .5rem; padding: .625rem .75rem; }
+  .stat-label { font-size: .65rem; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; color: var(--zinc-400); }
+  .stat-value { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 1.1rem; font-weight: 600; margin-top: .125rem; }
+  .uniqueness {
+    display: flex; align-items: center; justify-content: space-between; gap: .75rem;
+    border: 1px solid var(--zinc-200); background: var(--zinc-50); border-radius: .5rem; padding: .625rem .75rem;
+  }
+  .uniqueness .u-title { font-size: .85rem; font-weight: 500; }
+  .uniqueness .u-sub { font-size: .7rem; color: var(--zinc-500); margin-top: .1rem; }
+
+  /* ---------- replay ---------- */
+  .progress-wrap { margin-bottom: .75rem; }
+  .progress-meta { display: flex; justify-content: space-between; font-size: .7rem; color: var(--zinc-500); margin-bottom: .35rem; }
+  .progress-bar { height: .5rem; background: var(--zinc-200); border-radius: 999px; overflow: hidden; }
+  .progress-fill { height: 100%; background: var(--emerald-600); border-radius: 999px; width: 0%; transition: width .1s linear; }
+  select.speed-select {
+    height: 2.5rem; border: 1px solid var(--zinc-300); border-radius: .5rem; background: #fff;
+    font-size: .85rem; color: var(--zinc-700); padding: 0 .5rem; width: 100%;
+  }
+  details.sample-box { position: relative; }
+  details.sample-box summary {
+    list-style: none; display: flex; align-items: center; justify-content: space-between;
+    height: 2.5rem; padding: 0 .75rem; border: 1px solid var(--zinc-300); border-radius: .5rem;
+    font-size: .85rem; font-weight: 500; color: var(--zinc-600); background: #fff; transition: all .12s;
+  }
+  details.sample-box summary::-webkit-details-marker { display: none; }
+  details.sample-box summary:hover { background: var(--zinc-100); }
+  details.sample-box[open] summary { border-color: var(--emerald-500); }
+  .sample-menu {
+    position: absolute; bottom: calc(100% + 6px); left: 0; right: 0; z-index: 30;
+    background: #fff; border: 1px solid var(--zinc-200); border-radius: .5rem;
+    box-shadow: 0 10px 25px rgba(0,0,0,.12); overflow: hidden; padding: .25rem;
+  }
+  .sample-menu button {
+    display: block; width: 100%; text-align: left; padding: .5rem .625rem; border-radius: .375rem;
+    font-size: .8rem; color: var(--zinc-700);
+  }
+  .sample-menu button:hover { background: var(--emerald-50); color: var(--emerald-700); }
+
+  /* ---------- shortcuts ---------- */
+  .shortcut-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+  .shortcut-row + .shortcut-row { margin-top: .625rem; }
+  kbd {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .7rem;
+    border: 1px solid var(--zinc-300); background: var(--zinc-50); border-radius: .25rem;
+    padding: .125rem .4rem; color: var(--zinc-600);
+  }
+  .shortcut-row dd { font-size: .72rem; color: var(--zinc-500); }
+
+  /* ---------- toast ---------- */
+  .toast-zone { position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 100; display: flex; flex-direction: column; gap: .5rem; max-width: 340px; }
+  .toast {
+    background: #fff; border: 1px solid var(--zinc-200); border-radius: .625rem; padding: .75rem .875rem;
+    box-shadow: 0 10px 30px rgba(0,0,0,.14); animation: toast-in .25s ease;
+  }
+  .toast.destructive { border-color: var(--red-200); background: var(--red-50); }
+  .toast .t-title { font-size: .85rem; font-weight: 600; }
+  .toast.destructive .t-title { color: var(--red-600); }
+  .toast .t-desc { font-size: .75rem; color: var(--zinc-600); margin-top: .15rem; line-height: 1.45; }
+  @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+  /* ---------- algorithm section ---------- */
+  .algo-section { margin-top: 2.5rem; }
+  .algo-card { background: #fff; border: 1px solid var(--zinc-200); border-radius: .75rem; padding: 1.5rem; }
+  .algo-card h2 { font-size: 1.5rem; font-weight: 700; letter-spacing: -.02em; }
+  .algo-intro { font-size: .85rem; color: var(--zinc-500); line-height: 1.7; max-width: 48rem; margin-top: .5rem; }
+  .algo-grid { display: grid; gap: 1rem; grid-template-columns: 1fr; margin-top: 1.5rem; }
+  @media (min-width: 768px) { .algo-grid { grid-template-columns: 1fr 1fr; } }
+  .algo-item {
+    border: 1px solid var(--zinc-200); background: rgba(250,250,250,.6); border-radius: .5rem;
+    padding: 1.25rem; transition: all .15s;
+  }
+  .algo-item:hover { border-color: var(--emerald-300); background: rgba(236,253,245,.4); }
+  .algo-item-head { display: flex; align-items: center; gap: .625rem; margin-bottom: .75rem; }
+  .algo-item-icon {
+    width: 2.25rem; height: 2.25rem; border-radius: .5rem; background: var(--emerald-600);
+    color: #fff; display: flex; align-items: center; justify-content: center; font-size: .8rem; font-weight: 700;
+  }
+  .algo-item h3 { font-size: .9rem; font-weight: 600; }
+  .algo-item p { font-size: .82rem; color: var(--zinc-600); line-height: 1.65; margin-top: .5rem; }
+  .algo-item code, .algo-inline-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .76rem;
+    background: var(--zinc-100); border-radius: .25rem; padding: .1rem .3rem; color: var(--zinc-800);
+  }
+  .algo-code-block {
+    display: block; background: var(--zinc-100); border-radius: .375rem; padding: .5rem .75rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .76rem;
+    line-height: 1.6; margin: .6rem 0; overflow-x: auto; white-space: pre; color: var(--zinc-800);
+  }
+  .pseudo {
+    background: var(--zinc-900); color: var(--zinc-100); border-radius: .5rem; padding: 1rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .78rem;
+    line-height: 1.7; overflow-x: auto; margin-top: .75rem; white-space: pre;
+  }
+  .pseudo .cm { color: #7dd3a8; }
+  .algo-note { font-size: .8rem; color: var(--zinc-500); line-height: 1.7; margin-top: 1rem; }
+
+  /* ---------- footer ---------- */
+  .site-footer { background: #fff; border-top: 1px solid var(--zinc-200); margin-top: auto; }
+  .footer-inner {
+    max-width: 72rem; margin: 0 auto; padding: 1rem 1.5rem; font-size: .72rem; color: var(--zinc-500);
+    display: flex; flex-direction: column; align-items: center; gap: .25rem; text-align: center;
+  }
+  @media (min-width: 640px) { .footer-inner { flex-direction: row; justify-content: space-between; } }
+
+  .sidebar { display: flex; flex-direction: column; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="header-inner">
+    <div class="brand">
+      <span class="brand-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M3 15h18M9 3v18M15 3v18"/></svg>
+      </span>
+      <div>
+        <h1>Sudoku Solver</h1>
+        <p>Backtracking · MRV heuristic · Bitmask constraints</p>
+      </div>
+    </div>
+    <span class="header-badge">Runs 100% in your browser</span>
+  </div>
+</header>
+
+<main>
+  <div class="container">
+    <div class="grid-layout">
+      <!-- ======== board column ======== -->
+      <section aria-label="Sudoku grid">
+        <div class="board-wrap">
+          <div class="board-head">
+            <div>
+              <div class="section-title" id="board-title">1 · Enter Your Puzzle</div>
+              <div class="section-sub" id="board-sub">Click a cell, then type 1–9 — press N (Notes) to pencil-mark candidates.</div>
+            </div>
+            <span class="badge hidden" id="result-badge"></span>
+          </div>
+          <div class="board-frame" id="board-frame">
+            <div class="board" id="board" role="grid" aria-label="Sudoku board"></div>
+            <div class="solve-overlay" id="solve-overlay">
+              <div class="spinner" aria-hidden="true"></div>
+              <p>Searching the solution space…</p>
+            </div>
+          </div>
+          <div class="board-caption" id="board-caption">Empty grid — start typing, or load a sample puzzle from the panel.</div>
+        </div>
+      </section>
+
+      <!-- ======== sidebar ======== -->
+      <aside class="sidebar">
+        <!-- input mode -->
+        <div id="input-panel">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Number Pad</div>
+              <div class="card-desc">Tap a digit to fill the selected cell — with Notes on, it toggles a pencil mark</div>
+            </div>
+            <div class="card-body">
+              <div class="numpad" id="numpad"></div>
+              <div class="btn-row" style="margin-top: .5rem;">
+                <button class="tool-btn" id="notes-toggle" aria-pressed="false" aria-label="Toggle pencil-mark notes mode">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/><path d="m15 5 4 4"/></svg>
+                  Notes
+                </button>
+                <button class="tool-btn danger" id="erase-btn" aria-label="Erase selected cell">
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>
+                  Erase Cell
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Puzzle Status</div>
+              <div class="card-desc">Validity is checked as you type</div>
+            </div>
+            <div class="card-body">
+              <div class="hint-warn hidden" id="clue-warning">
+                Proper 9×9 puzzles need at least 17 clues — with fewer, many solutions will exist (the solver will tell you).
+              </div>
+              <div class="alert-error hidden" id="status-error">
+                <div class="alert-title" id="status-error-title"></div>
+                <div class="alert-msg" id="status-error-msg"></div>
+              </div>
+              <button class="btn btn-primary" id="solve-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"/></svg>
+                Solve Puzzle
+              </button>
+              <div class="btn-row" style="margin-top: .625rem;">
+                <details class="sample-box" id="sample-box">
+                  <summary><span id="sample-label">Load Sample</span><span aria-hidden="true">▾</span></summary>
+                  <div class="sample-menu" id="sample-menu"></div>
+                </details>
+                <button class="btn btn-outline danger" id="clear-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>
+                  Clear All
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">Keyboard Shortcuts</div>
+            </div>
+            <div class="card-body">
+              <dl>
+                <div class="shortcut-row"><dt><kbd>1 – 9</kbd></dt><dd>Fill selected cell</dd></div>
+                <div class="shortcut-row"><dt><kbd>0 / ⌫ / Del</kbd></dt><dd>Erase selected cell</dd></div>
+                <div class="shortcut-row"><dt><kbd>↑ ↓ ← →</kbd></dt><dd>Move selection (wraps left/right)</dd></div>
+                <div class="shortcut-row"><dt><kbd>N</kbd></dt><dd>Toggle notes (pencil marks)</dd></div>
+                <div class="shortcut-row"><dt><kbd>⇧ + 1–9</kbd></dt><dd>Toggle a note in the selected cell</dd></div>
+                <div class="shortcut-row"><dt><kbd>Esc</kbd></dt><dd>Deselect cell</dd></div>
+              </dl>
+            </div>
+          </div>
+        </div>
+
+        <!-- result mode -->
+        <div id="result-panel" class="hidden">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title" style="color: var(--emerald-700);">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
+                Solution Found
+              </div>
+              <div class="card-desc" id="result-desc"></div>
+            </div>
+            <div class="card-body">
+              <div class="stats-grid" id="stats-grid"></div>
+              <div class="uniqueness" style="margin-top: 1rem;">
+                <div>
+                  <div class="u-title">Solution uniqueness</div>
+                  <div class="u-sub" id="uniqueness-sub"></div>
+                </div>
+                <span class="badge" id="uniqueness-badge"></span>
+              </div>
+
+              <div style="margin-top: 1rem;">
+                <!-- replay start button -->
+                <button class="btn btn-dark" id="replay-start-btn">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                  Watch Solving Process<span class="steps-count" id="replay-steps"></span>
+                </button>
+                <!-- replay controls -->
+                <div id="replay-controls" class="hidden">
+                  <div class="progress-wrap">
+                    <div class="progress-meta"><span id="replay-step-label">Step 0 / 0</span><span id="replay-pct">0%</span></div>
+                    <div class="progress-bar"><div class="progress-fill" id="replay-progress"></div></div>
+                  </div>
+                  <div class="btn-row" style="margin-bottom: .5rem;">
+                    <button class="btn btn-outline" id="replay-toggle">
+                      <svg id="icon-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="14" y="4" width="4" height="16" rx="1"/><rect x="6" y="4" width="4" height="16" rx="1"/></svg>
+                      <svg id="icon-play" class="hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>
+                      <span id="replay-toggle-label">Pause</span>
+                    </button>
+                    <select class="speed-select" id="replay-speed" aria-label="Replay speed">
+                      <option value="1">1× speed</option>
+                      <option value="2" selected>2× speed</option>
+                      <option value="4">4× speed</option>
+                      <option value="8">8× speed</option>
+                    </select>
+                  </div>
+                  <div class="btn-row">
+                    <button class="btn btn-outline" id="replay-skip">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
+                      Skip to End
+                    </button>
+                    <button class="btn btn-outline" id="replay-final">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.801 10A10 10 0 1 1 17 3.335"/><path d="m9 11 3 3L22 4"/></svg>
+                      Final Grid
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <button class="btn btn-outline" id="edit-btn" style="width: 100%; height: 2.75rem; margin-top: .75rem;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.174 6.812a1 1 0 0 0-3.986-3.987L3.842 16.174a2 2 0 0 0-.5.83l-1.321 4.352a.5.5 0 0 0 .623.622l4.353-1.32a2 2 0 0 0 .83-.497z"/></svg>
+                Edit Puzzle
+              </button>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+
+    <!-- ======== algorithm explanation ======== -->
+    <section class="algo-section" aria-labelledby="algo-title">
+      <div class="algo-card">
+        <h2 id="algo-title">How the Solver Works</h2>
+        <p class="algo-intro">
+          The engine is a classic <strong>backtracking depth-first search</strong> over the space of legal grids,
+          accelerated with the <strong>MRV (Minimum Remaining Values)</strong> heuristic and
+          <strong> bitmask constraint propagation</strong>. Together these turn an NP-sized brute-force problem
+          into a millisecond-scale search for virtually any 9×9 puzzle.
+        </p>
+        <div class="algo-grid">
+          <div class="algo-item">
+            <div class="algo-item-head"><span class="algo-item-icon">01</span><h3>Bitmask Constraint Tracking</h3></div>
+            <p>Every row, column and 3×3 box keeps a 9-bit integer — bit <code>d−1</code> set means digit <code>d</code> is already used. The legal candidates of a cell are computed in a single expression:</p>
+            <span class="algo-code-block">cand = 0x1FF &amp; ~(rowMask | colMask | boxMask)</span>
+            <p>No loops over 9 cells, no sets, no allocations — just three ORs, one NOT and one AND, making each constraint check effectively O(1).</p>
+          </div>
+          <div class="algo-item">
+            <div class="algo-item-head"><span class="algo-item-icon">02</span><h3>MRV Heuristic</h3></div>
+            <p>Instead of filling cells left-to-right, the solver always branches on the empty cell with the <strong>Minimum Remaining Values</strong> — the fewest legal candidates.</p>
+            <p>A cell with one candidate is a <em>forced move</em> (free constraint propagation), and a cell with zero candidates proves the branch is dead instantly. This single decision rule shrinks the search tree from millions of nodes to a few hundred on typical puzzles.</p>
+          </div>
+          <div class="algo-item">
+            <div class="algo-item-head"><span class="algo-item-icon">03</span><h3>Backtracking DFS</h3></div>
+            <p>The solver performs a depth-first search: place a digit, update the three unit masks, recurse. If the subtree fails, the digit is removed (masks restored with bitwise AND-NOT) and the next candidate is tried.</p>
+            <p>Every placement and rollback is recorded as a step, which powers the <strong>Watch Solving Process</strong> replay — you can literally watch the algorithm think, including its backtracks.</p>
+          </div>
+          <div class="algo-item">
+            <div class="algo-item-head"><span class="algo-item-icon">04</span><h3>Uniqueness Verification</h3></div>
+            <p>After the first solution is found, the search continues until a second complete grid appears or the space is exhausted (capped at 2 solutions).</p>
+            <p>This tells you whether your puzzle has a <strong>unique solution</strong> — the standard requirement for a proper Sudoku — or is underconstrained. The app flags the difference in the results panel.</p>
+          </div>
+        </div>
+        <h3 style="font-size: .85rem; font-weight: 600; margin-top: 1.5rem;">Search Loop in Pseudocode</h3>
+        <div class="pseudo"><span class="cm">search():</span>
+  if board is complete:            <span class="cm"># 81 digits, all constraints hold</span>
+      record solution; return true
+  cell ← empty cell with FEWEST candidates     <span class="cm"># MRV heuristic</span>
+  if candidates(cell) = ∅:         <span class="cm"># contradiction detected early</span>
+      prune this branch
+  for d in candidates(cell):       <span class="cm"># iterate set bits of the 9-bit mask</span>
+      place d; rowMask |= d; colMask |= d; boxMask |= d
+      if search(): return true     <span class="cm"># descend depth-first</span>
+      remove d; restore masks      <span class="cm"># ← backtracking</span>
+  return false                     <span class="cm"># all candidates failed</span></div>
+        <p class="algo-note">
+          <strong style="color: var(--zinc-700);">Complexity.</strong> Worst-case Sudoku search is exponential (the problem is NP-complete in its generalized n² × n² form), but the MRV ordering makes practical instances tiny: an easy daily puzzle solves with <em>zero</em> backtracks, while the hardest known grids need only a few hundred. Memory usage is O(81) for the grid plus O(depth) for the recursion stack.
+        </p>
+      </div>
+    </section>
+  </div>
+</main>
+
+<footer class="site-footer">
+  <div class="footer-inner">
+    <p>Sudoku Solver — depth-first backtracking with MRV heuristic and bitmask constraint propagation.</p>
+    <p>All computation runs locally in your browser.</p>
+  </div>
+</footer>
+
+<div class="toast-zone" id="toast-zone" aria-live="polite"></div>
+<script>
+'use strict';
+/* =====================================================================
+ * Sudoku Solver — standalone edition.
+ * Backtracking DFS + MRV heuristic + 9-bit bitmask constraint tracking.
+ * ===================================================================== */
+
+/* ------------------------------ solver ------------------------------ */
+const ALL = 0x1FF;
+const boxOf = i => Math.floor(i / 27) * 3 + Math.floor((i % 9) / 3);
+const rowOf = i => Math.floor(i / 9);
+const colOf = i => i % 9;
+const popcount = x => { let n = 0; while (x) { x &= x - 1; n++; } return n; };
+
+const EMPTY_GRID = new Array(81).fill(0);
+
+function getConflicts(grid) {
+  const bad = new Set();
+  const units = [];
+  for (let k = 0; k < 9; k++) {
+    const row = [], col = [], box = [];
+    const r0 = Math.floor(k / 3) * 3, c0 = (k % 3) * 3;
+    for (let j = 0; j < 9; j++) {
+      row.push(k * 9 + j);
+      col.push(j * 9 + k);
+      box.push((r0 + Math.floor(j / 3)) * 9 + c0 + (j % 3));
+    }
+    units.push(row, col, box);
+  }
+  for (const unit of units) {
+    const seen = new Map();
+    for (const i of unit) {
+      const v = grid[i];
+      if (v < 1 || v > 9) continue;
+      if (seen.has(v)) seen.get(v).push(i); else seen.set(v, [i]);
+    }
+    for (const idxs of seen.values()) if (idxs.length > 1) for (const i of idxs) bad.add(i);
+  }
+  return bad;
+}
+
+function givensAreConsistent(grid) {
+  for (let i = 0; i < 81; i++) {
+    const v = grid[i];
+    if (v === 0) continue;
+    if (!Number.isInteger(v) || v < 1 || v > 9) return false;
+  }
+  return getConflicts(grid).size === 0;
+}
+
+function runSearch(puzzle, solutionsWanted, record) {
+  const grid = puzzle.slice();
+  const rowM = new Array(9).fill(0), colM = new Array(9).fill(0), boxM = new Array(9).fill(0);
+  let empties = 0;
+  for (let i = 0; i < 81; i++) {
+    if (grid[i] === 0) { empties++; continue; }
+    const b = 1 << (grid[i] - 1);
+    rowM[rowOf(i)] |= b; colM[colOf(i)] |= b; boxM[boxOf(i)] |= b;
+  }
+  const solutions = [];
+  const steps = record ? [] : null;
+  let placements = 0, backtracks = 0;
+  const STEP_CAP = 400000;
+
+  function search() {
+    if (empties === 0) { solutions.push(grid.slice()); return solutions.length >= solutionsWanted; }
+    let best = -1, bestCand = 0, bestCnt = 10;
+    for (let i = 0; i < 81; i++) {
+      if (grid[i] !== 0) continue;
+      const cand = ALL & ~(rowM[rowOf(i)] | colM[colOf(i)] | boxM[boxOf(i)]);
+      const cnt = popcount(cand);
+      if (cnt === 0) return false;
+      if (cnt < bestCnt) { bestCnt = cnt; bestCand = cand; best = i; if (cnt === 1) break; }
+    }
+    const r = rowOf(best), c = colOf(best), bx = boxOf(best);
+    for (let d = 1; d <= 9; d++) {
+      const b = 1 << (d - 1);
+      if (!(bestCand & b)) continue;
+      grid[best] = d; rowM[r] |= b; colM[c] |= b; boxM[bx] |= b; empties--;
+      placements++;
+      if (record) steps.push({ t: 'place', i: best, d });
+      if (search()) return true;
+      grid[best] = 0; rowM[r] &= ~b; colM[c] &= ~b; boxM[bx] &= ~b; empties++;
+      backtracks++;
+      if (record) steps.push({ t: 'backtrack', i: best, d });
+      if (record && steps.length > STEP_CAP) return solutions.length > 0;
+    }
+    return false;
+  }
+  search();
+  return { solutions, placements, backtracks, steps };
+}
+
+function solveSudoku(puzzle) {
+  const t0 = performance.now();
+  if (!givensAreConsistent(puzzle)) {
+    return { status: 'invalid', solution: null, unique: null, timeMs: 0, placements: 0, backtracks: 0, steps: [] };
+  }
+  const a = runSearch(puzzle, 1, true);
+  if (a.solutions.length === 0) {
+    return { status: 'unsolvable', solution: null, unique: null, timeMs: performance.now() - t0, placements: 0, backtracks: 0, steps: [] };
+  }
+  const b = runSearch(puzzle, 2, false);
+  return {
+    status: 'solved',
+    solution: a.solutions[0],
+    unique: b.solutions.length < 2,
+    timeMs: performance.now() - t0,
+    placements: a.placements,
+    backtracks: a.backtracks,
+    steps: a.steps,
+  };
+}
+
+/* --------------------------- sample puzzles --------------------------- */
+function stringToGrid(s) {
+  const g = [];
+  for (const ch of s) g.push(ch === '.' || ch === '0' ? 0 : Number(ch) || 0);
+  return g;
+}
+const SAMPLES = [
+  { id: 'easy', name: 'Classic Evening Daily', diff: 'Easy',
+    desc: 'A gentle newspaper puzzle — pure constraint propagation, almost no backtracking.',
+    grid: stringToGrid('530070000600195000098000060800060003400803001700020006060000280000419005000080079') },
+  { id: 'hard', name: 'AI Escargot', diff: 'Hard',
+    desc: 'Discovered in 2006 by Arto Inkala — famously one of the hardest Sudoku puzzles ever created.',
+    grid: stringToGrid('100007090030020008009600500005300900010080002600004000300000010040000007007000300') },
+  { id: 'expert', name: "Norvig's Gauntlet", diff: 'Expert',
+    desc: 'A pathological puzzle from Peter Norvig\u2019s essay — it forces the search tree to branch deeply.',
+    grid: stringToGrid('4.....8.5.3..........7......2.....6.....8.4......1.......6.3.7.5..2.....1.4......') },
+];
+
+/* ------------------------------ state ------------------------------ */
+let puzzle = EMPTY_GRID.slice();
+let mode = 'input';            // 'input' | 'result'
+let selected = null;           // cell index or null
+let result = null;
+let solving = false;
+let statusError = null;        // {title, msg}
+let notes = new Array(81).fill(0); // pencil-mark bitmask per cell (bit d-1 = candidate d)
+let notesMode = false;             // when true, digit input toggles pencil marks instead of filling
+
+const replay = { active: false, playing: false, cursor: 0, total: 0, speed: 2 };
+let replayGrid = null;         // grid currently shown during replay
+let lastStep = null;           // {t,i,d} of most recent replay event
+let replayBuf = null;          // mutable working grid
+let replayTimer = null;
+
+/* ------------------------------ dom ------------------------------ */
+const $ = id => document.getElementById(id);
+const boardEl = $('board'), boardFrame = $('board-frame');
+const cellEls = [];
+
+function buildBoard() {
+  for (let i = 0; i < 81; i++) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.tabIndex = -1;
+    btn.dataset.index = i;
+    const r = Math.floor(i / 9), c = i % 9;
+    if (c % 3 === 2 && c < 8) btn.classList.add('br-r');
+    if (r % 3 === 2 && r < 8) btn.classList.add('br-b');
+    if (r === 8) btn.style.borderBottom = 'none';
+    if (c === 8) btn.style.borderRight = 'none';
+    btn.addEventListener('click', () => {
+      if (mode !== 'input') return;
+      setSelected(selected === i ? null : i);
+    });
+    boardEl.appendChild(btn);
+    cellEls.push(btn);
+  }
+}
+
+function buildNumpad() {
+  const pad = $('numpad');
+  for (let d = 1; d <= 9; d++) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = d;
+    b.setAttribute('aria-label', 'Insert digit ' + d);
+    b.dataset.digit = d;
+    b.addEventListener('click', () => handlePadInput(d));
+    pad.appendChild(b);
+  }
+}
+
+function buildSamples() {
+  const menu = $('sample-menu');
+  for (const s of SAMPLES) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = s.diff + ' · ' + s.name;
+    b.addEventListener('click', () => {
+      loadSample(s);
+      $('sample-box').removeAttribute('open');
+    });
+    menu.appendChild(b);
+  }
+}
+
+/* ------------------------------ toasts ------------------------------ */
+function toast(title, desc, destructive) {
+  const zone = $('toast-zone');
+  const el = document.createElement('div');
+  el.className = 'toast' + (destructive ? ' destructive' : '');
+  const t = document.createElement('div');
+  t.className = 't-title';
+  t.textContent = title;
+  const d = document.createElement('div');
+  d.className = 't-desc';
+  d.textContent = desc || '';
+  el.appendChild(t); el.appendChild(d);
+  zone.appendChild(el);
+  setTimeout(() => { el.style.transition = 'opacity .3s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 320); }, 4200);
+}
+
+/* --------------------------- rendering --------------------------- */
+function displayGrid() {
+  if (replayGrid) return replayGrid;
+  if (mode === 'result' && result && result.solution) return result.solution;
+  return puzzle;
+}
+
+function render() {
+  const g = displayGrid();
+  const conflicts = mode === 'input' ? getConflicts(puzzle) : new Set();
+  const selVal = selected != null ? puzzle[selected] : 0;
+  const selRow = selected != null ? rowOf(selected) : -1;
+  const selCol = selected != null ? colOf(selected) : -1;
+  const selBox = selected != null ? boxOf(selected) : -1;
+
+  for (let i = 0; i < 81; i++) {
+    const el = cellEls[i];
+    const v = g[i];
+    const r = rowOf(i), c = colOf(i), b = boxOf(i);
+    const showNotes = mode === 'input' && v === 0 && notes[i] !== 0;
+    let noteList = '';
+    if (showNotes) {
+      const parts = [];
+      for (let d = 1; d <= 9; d++) if (notes[i] & (1 << (d - 1))) parts.push(d);
+      noteList = parts.join(', ');
+    }
+    el.textContent = v !== 0 ? v : '';
+    if (showNotes) {
+      const wrap = document.createElement('div');
+      wrap.className = 'notes';
+      for (let d = 1; d <= 9; d++) {
+        const sp = document.createElement('span');
+        if (notes[i] & (1 << (d - 1))) {
+          sp.textContent = d;
+          if (selVal === d) sp.classList.add('match');
+        }
+        wrap.appendChild(sp);
+      }
+      el.appendChild(wrap);
+    }
+    el.setAttribute('aria-label', 'Row ' + (r + 1) + ', column ' + (c + 1) + ': ' + (v || (showNotes ? 'notes ' + noteList : 'empty')));
+    el.className = 'cell';
+    if ((c % 3 === 2) && c < 8) el.classList.add('br-r');
+    if ((r % 3 === 2) && r < 8) el.classList.add('br-b');
+    if (r === 8) el.style.borderBottom = 'none';
+    if (c === 8) el.style.borderRight = 'none';
+
+    const isSel = selected === i && mode === 'input';
+    const isPeer = selected != null && !isSel && (r === selRow || c === selCol || b === selBox);
+    const isSame = !isSel && v !== 0 && v === selVal && selVal !== 0;
+
+    if (conflicts.has(i)) el.classList.add('conflict');
+    else if (isSel) el.classList.add('selected');
+    else if (replay.active && lastStep && lastStep.i === i) el.classList.add(lastStep.t === 'place' ? 'flash-place' : 'flash-back');
+    else if (isSame) el.classList.add('same');
+    else if (isPeer) el.classList.add('peer');
+
+    if (v !== 0) {
+      const isGiven = puzzle[i] !== 0;
+      if (isGiven) el.classList.add('given');
+      else if (mode === 'result' || replay.active) el.classList.add('solved-digit');
+    }
+  }
+
+  // completed digits for numpad dimming
+  const counts = new Array(10).fill(0);
+  for (const v of puzzle) if (v >= 1 && v <= 9) counts[v]++;
+  document.querySelectorAll('#numpad button').forEach(b => {
+    b.classList.toggle('done', counts[Number(b.dataset.digit)] >= 9);
+  });
+  $('numpad').classList.toggle('notes-on', notesMode);
+
+  // clue caption
+  const clues = puzzle.reduce((a, v) => a + (v >= 1 && v <= 9 ? 1 : 0), 0);
+  $('clue-warning').classList.toggle('hidden', !(clues > 0 && clues < 17 && conflicts.size === 0));
+  if (mode === 'input') {
+    $('board-caption').textContent = clues === 0
+      ? 'Empty grid — start typing, or load a sample puzzle from the panel.'
+      : clues + ' clue' + (clues === 1 ? '' : 's') + ' entered' + (conflicts.size > 0 ? ' · ' + conflicts.size + ' conflict' + (conflicts.size === 1 ? '' : 's') + ' to fix' : '');
+  }
+}
+
+function renderStatusError() {
+  const box = $('status-error');
+  if (statusError) {
+    box.classList.remove('hidden');
+    $('status-error-title').textContent = statusError.title;
+    $('status-error-msg').textContent = statusError.msg;
+  } else {
+    box.classList.add('hidden');
+  }
+}
+
+function setMode(m) {
+  mode = m;
+  $('input-panel').classList.toggle('hidden', m !== 'input');
+  $('result-panel').classList.toggle('hidden', m !== 'result');
+  boardFrame.classList.toggle('readonly', m !== 'input');
+  if (m === 'input') {
+    $('board-title').textContent = '1 · Enter Your Puzzle';
+    $('board-sub').textContent = 'Click a cell, then type 1–9 — press N (Notes) to pencil-mark candidates.';
+    $('result-badge').classList.add('hidden');
+  } else {
+    $('board-title').textContent = '2 · Solved Grid';
+    $('board-sub').textContent = replay.active
+      ? 'Replaying the search — green flashes are placements, red flashes are backtracks.'
+      : 'Dark digits are your original clues · emerald digits were computed by the solver.';
+  }
+}
+
+function renderResult() {
+  if (!result || result.status !== 'solved') return;
+  const ms = result.timeMs < 1 ? '< 1 ms' : result.timeMs.toFixed(1) + ' ms';
+  $('stats-grid').innerHTML = '';
+  const tiles = [
+    ['Solve Time', ms],
+    ['Placements', result.placements.toLocaleString()],
+    ['Backtracks', result.backtracks.toLocaleString()],
+    ['Clues Given', String(puzzle.reduce((a, v) => a + (v > 0 ? 1 : 0), 0))],
+  ];
+  for (const [label, value] of tiles) {
+    const tile = document.createElement('div');
+    tile.className = 'stat-tile';
+    const l = document.createElement('div'); l.className = 'stat-label'; l.textContent = label;
+    const v = document.createElement('div'); v.className = 'stat-value'; v.textContent = value;
+    tile.appendChild(l); tile.appendChild(v);
+    $('stats-grid').appendChild(tile);
+  }
+  const uBadge = $('uniqueness-badge'), uSub = $('uniqueness-sub');
+  if (result.unique) {
+    uBadge.className = 'badge badge-unique'; uBadge.textContent = 'Unique';
+    uSub.textContent = 'Exactly one valid completion exists.';
+    $('result-desc').textContent = 'The search proved this completion is the only one.';
+  } else {
+    uBadge.className = 'badge badge-multi'; uBadge.textContent = 'Multiple';
+    uSub.textContent = 'This grid admits several valid solutions.';
+    $('result-desc').textContent = 'The grid is underconstrained — showing the first valid completion.';
+  }
+  const headBadge = $('result-badge');
+  headBadge.className = 'badge ' + (result.unique ? 'badge-unique' : 'badge-multi');
+  headBadge.textContent = result.unique ? 'Unique solution' : 'Multiple solutions';
+  headBadge.classList.remove('hidden');
+  $('replay-steps').textContent = ' ' + result.steps.length.toLocaleString() + ' steps';
+}
+
+/* --------------------------- actions --------------------------- */
+function setSelected(i) { selected = i; render(); }
+
+function exitReplay() {
+  replay.active = false; replay.playing = false; replay.cursor = 0; replay.total = 0;
+  replayGrid = null; lastStep = null; replayBuf = null;
+  if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+  $('replay-controls').classList.add('hidden');
+  $('replay-start-btn').classList.remove('hidden');
+}
+
+function editCell(i, v) {
+  puzzle[i] = v;
+  if (v !== 0) {
+    notes[i] = 0;
+    const b = 1 << (v - 1);
+    const r = rowOf(i), c = colOf(i), bx = boxOf(i);
+    for (let j = 0; j < 81; j++) {
+      if (j !== i && (rowOf(j) === r || colOf(j) === c || boxOf(j) === bx)) notes[j] &= ~b;
+    }
+  }
+  result = null;
+  statusError = null;
+  exitReplay();
+  setMode('input');
+  render();
+  renderStatusError();
+}
+
+function toggleNote(i, d) {
+  if (puzzle[i] !== 0) {
+    toast('Cell already filled', 'Erase the digit first, then pencil-mark its candidates.');
+    return;
+  }
+  notes[i] ^= (1 << (d - 1));
+  render();
+}
+
+function eraseSelectedCell() {
+  if (selected == null) { toast('No cell selected', 'Click a cell on the board first.'); return; }
+  if (puzzle[selected] === 0) {
+    if (notes[selected] !== 0) { notes[selected] = 0; render(); }
+    return;
+  }
+  editCell(selected, 0);
+}
+
+function setNotesMode(on) {
+  notesMode = on;
+  const btn = $('notes-toggle');
+  btn.classList.toggle('active', on);
+  btn.setAttribute('aria-pressed', String(on));
+  $('numpad').classList.toggle('notes-on', on);
+}
+
+function clearAll() {
+  puzzle = EMPTY_GRID.slice();
+  notes = new Array(81).fill(0);
+  selected = null;
+  result = null;
+  statusError = null;
+  exitReplay();
+  setMode('input');
+  render();
+  renderStatusError();
+}
+
+function loadSample(s) {
+  puzzle = s.grid.slice();
+  notes = new Array(81).fill(0);
+  selected = null;
+  result = null;
+  statusError = null;
+  exitReplay();
+  setMode('input');
+  render();
+  renderStatusError();
+  toast('Loaded \u201C' + s.name + '\u201D', s.desc);
+}
+
+function handlePadInput(d) {
+  if (selected == null) { toast('No cell selected', 'Click a cell on the board first, then tap a digit.'); return; }
+  if (notesMode) { toggleNote(selected, d); return; }
+  editCell(selected, d);
+}
+
+function handleSolve() {
+  if (solving) return;
+  exitReplay();
+  const conflicts = getConflicts(puzzle);
+  if (conflicts.size > 0) {
+    statusError = { title: 'Conflicting clues', msg: conflicts.size + ' cell(s) repeat a digit within their row, column or box. Fix the red cells before solving.' };
+    renderStatusError();
+    return;
+  }
+  statusError = null;
+  renderStatusError();
+  selected = null;
+  solving = true;
+  $('solve-overlay').classList.add('show');
+  setTimeout(() => {
+    const res = solveSudoku(puzzle);
+    solving = false;
+    $('solve-overlay').classList.remove('show');
+    result = res;
+    if (res.status === 'solved') {
+      setMode('result');
+      renderResult();
+      render();
+      toast(
+        res.unique ? 'Puzzle solved — unique solution' : 'Puzzle solved — multiple solutions',
+        res.unique
+          ? 'Found in ' + (res.timeMs < 1 ? '<1' : res.timeMs.toFixed(1)) + ' ms · ' + res.placements + ' placements · ' + res.backtracks + ' backtracks.'
+          : 'This grid is underconstrained: several valid completions exist. Showing the first one found.'
+      );
+    } else if (res.status === 'unsolvable') {
+      statusError = { title: 'No solution exists', msg: 'The clues are mutually contradictory — the search space was exhausted without finding a complete grid. Review your entries.' };
+      renderStatusError();
+      toast('Unsolvable puzzle', 'No complete grid satisfies all clues.', true);
+    } else {
+      statusError = { title: 'Invalid puzzle', msg: 'Some entries are not digits 1–9 or duplicate an existing clue.' };
+      renderStatusError();
+      toast('Invalid puzzle', 'Please review the highlighted entries.', true);
+    }
+  }, 60);
+}
+
+/* --------------------------- replay engine --------------------------- */
+function startReplay() {
+  if (!result || !result.solution || !result.steps.length) return;
+  replay.active = true; replay.cursor = 0; replay.total = result.steps.length;
+  replayBuf = puzzle.slice();
+  replayGrid = replayBuf.slice();
+  lastStep = null;
+  setReplayUI();
+  setMode('result');
+  render();
+  tickReplay();
+}
+
+function setReplayUI() {
+  $('replay-controls').classList.toggle('hidden', !replay.active);
+  $('replay-start-btn').classList.toggle('hidden', replay.active);
+}
+
+function tickReplay() {
+  if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+  if (!replay.active || !replay.playing) return;
+  const total = replay.total;
+  const stepsPerTick = Math.max(1, Math.ceil(total / 400));
+  const interval = Math.max(16, Math.round(40 / replay.speed));
+  replayTimer = setInterval(() => {
+    const prev = replay.cursor;
+    if (prev >= total) { replay.playing = false; updateReplayToggle(); clearInterval(replayTimer); replayTimer = null; return; }
+    const next = Math.min(prev + stepsPerTick, total);
+    for (let k = prev; k < next; k++) {
+      const st = result.steps[k];
+      replayBuf[st.i] = st.t === 'place' ? st.d : 0;
+    }
+    replay.cursor = next;
+    replayGrid = replayBuf.slice();
+    lastStep = result.steps[next - 1];
+    $('replay-progress').style.width = (next / total * 100) + '%';
+    $('replay-step-label').textContent = 'Step ' + next.toLocaleString() + ' / ' + total.toLocaleString();
+    $('replay-pct').textContent = Math.round(next / total * 100) + '%';
+    render();
+    if (next >= total) { replay.playing = false; updateReplayToggle(); clearInterval(replayTimer); replayTimer = null; }
+  }, interval);
+}
+
+function updateReplayToggle() {
+  const finished = replay.active && replay.total > 0 && replay.cursor >= replay.total;
+  $('replay-toggle-label').textContent = replay.playing ? 'Pause' : (finished ? 'Replay' : 'Play');
+  $('icon-pause').classList.toggle('hidden', !replay.playing);
+  $('icon-play').classList.toggle('hidden', replay.playing);
+}
+
+function togglePlay() {
+  if (!replay.active) return;
+  if (!replay.playing && replay.total > 0 && replay.cursor >= replay.total) {
+    replayBuf = puzzle.slice();
+    replayGrid = replayBuf.slice();
+    replay.cursor = 0;
+    lastStep = null;
+    replay.playing = true;
+    updateReplayToggle(); tickReplay(); return;
+  }
+  replay.playing = !replay.playing;
+  updateReplayToggle(); tickReplay();
+}
+
+function skipToEnd() {
+  if (!result || !result.solution) return;
+  replay.cursor = replay.total;
+  replayBuf = result.solution.slice();
+  replayGrid = replayBuf.slice();
+  lastStep = null;
+  replay.playing = false;
+  if (replayTimer) { clearInterval(replayTimer); replayTimer = null; }
+  $('replay-progress').style.width = '100%';
+  $('replay-step-label').textContent = 'Step ' + replay.total.toLocaleString() + ' / ' + replay.total.toLocaleString();
+  $('replay-pct').textContent = '100%';
+  updateReplayToggle();
+  render();
+}
+
+/* --------------------------- keyboard --------------------------- */
+window.addEventListener('keydown', e => {
+  if (mode !== 'input' || solving) return;
+  const t = e.target;
+  if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+  if (e.key === 'n' || e.key === 'N') { e.preventDefault(); setNotesMode(!notesMode); return; }
+  if (e.shiftKey && /^(Digit|Numpad)[1-9]$/.test(e.code || '')) {
+    if (selected != null) { e.preventDefault(); toggleNote(selected, Number(e.code.slice(-1))); }
+    return;
+  }
+  if (/^[1-9]$/.test(e.key)) {
+    if (selected != null) { e.preventDefault(); if (notesMode) toggleNote(selected, Number(e.key)); else editCell(selected, Number(e.key)); }
+    return;
+  }
+  if (e.key === '0' || e.key === 'Backspace' || e.key === 'Delete') {
+    if (selected != null) { e.preventDefault(); eraseSelectedCell(); }
+    return;
+  }
+  if (selected == null) return;
+  switch (e.key) {
+    case 'ArrowUp': e.preventDefault(); if (selected > 8) setSelected(selected - 9); break;
+    case 'ArrowDown': e.preventDefault(); if (selected < 72) setSelected(selected + 9); break;
+    case 'ArrowLeft': e.preventDefault(); setSelected(selected % 9 === 0 ? selected + 8 : selected - 1); break;
+    case 'ArrowRight': e.preventDefault(); setSelected(selected % 9 === 8 ? selected - 8 : selected + 1); break;
+    case 'Escape': setSelected(null); break;
+  }
+});
+
+/* --------------------------- wiring --------------------------- */
+ $('solve-btn').addEventListener('click', handleSolve);
+ $('clear-btn').addEventListener('click', clearAll);
+ $('erase-btn').addEventListener('click', eraseSelectedCell);
+ $('notes-toggle').addEventListener('click', () => setNotesMode(!notesMode));
+ $('replay-start-btn').addEventListener('click', () => { replay.playing = true; startReplay(); updateReplayToggle(); });
+ $('replay-toggle').addEventListener('click', togglePlay);
+ $('replay-skip').addEventListener('click', skipToEnd);
+ $('replay-final').addEventListener('click', () => { exitReplay(); setMode('result'); render(); });
+ $('edit-btn').addEventListener('click', () => { exitReplay(); setMode('input'); render(); });
+ $('replay-speed').addEventListener('change', e => {
+  replay.speed = Number(e.target.value);
+  if (replay.active && replay.playing) tickReplay();
+});
+
+buildBoard();
+buildNumpad();
+buildSamples();
+render();
+</script>
+</body>
+</html>
